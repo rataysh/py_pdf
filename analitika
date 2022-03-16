@@ -1,0 +1,84 @@
+import os, xlsxwriter, openpyxl, time
+import pandas as pd
+
+
+start_time = time.time()
+specials_index = []
+names_xls = []
+name_xlsx_file = 'analitika'
+special_ych = ['PPPPPPPP', 'GGGGGGGG'] 
+path_to_directory = r'C:\Users'    # input('Введите путь старта:\n')
+fact_cfr_kom = 'name_file'
+ # # # Наименивание файла
+now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+filename = f'{name_xlsx_file}{now}.xlsx'
+
+def search():
+    '''Функция для прохода по всем файлам в введенном пути'''
+    for adress, dirs, files in os.walk(path_to_directory):
+        for file in files:
+            if file[-9:] == '.info.xml' or '_'.join(file.split('_')[3:-1]) != fact_cfr_kom:  # Критери исключений из поиска
+                continue
+            else:
+                output = (f'{adress}\{file}').replace('\\', '/')
+                names_xls.append(output)
+            yield output
+
+
+def statistic_for_gtp():
+    '''Сбор статистики по каждому разрезу'''
+    new_file = pd.ExcelFile(filename)
+    sheet_names = new_file.sheet_names
+    for i in sheet_names:
+        open_stat_file = pd.read_excel(filename, sheet_name=i)
+        # print(open_stat_file[9].astype(float).agg(['count', 'sum', 'mean', 'median', 'std', 'max', 'min']))  # # # astype(float).
+        stat_cost_df = open_stat_file[10].astype(float).agg(['count', 'sum', 'mean', 'median', 'std', 'max', 'min'])
+        stat_value_df = open_stat_file[6].astype(float).agg(['count', 'sum', 'mean', 'median', 'std', 'max', 'min'])
+        stat_df = pd.merge(stat_cost_df, stat_value_df, left_index=True, right_index=True)
+        stat_df.columns = ['Cost', 'Volume']
+        with pd.ExcelWriter(filename, engine="openpyxl", mode='a', if_sheet_exists='new') as writer:
+            stat_df.to_excel(writer, sheet_name=i + '_stat')
+
+
+
+'''Формат отображения без e'''
+pd.set_option('display.float.format', '{:.2f}'.format)
+analitika_df = pd.DataFrame()
+for i in search():
+    file_df = pd.read_excel(i, header=None)
+    file_df = file_df[[1, 2, 6, 7, 8, 9, 10]]
+    changed_df = file_df[20:]
+    analitika_df = pd.concat([analitika_df, changed_df])
+
+analitika_df = analitika_df.reset_index(drop=True)
+with pd.ExcelWriter(filename) as writer:
+    analitika_df.to_excel(writer, sheet_name='all_GTP')
+
+analitika_df_change = analitika_df
+special_column_name = 'GTP_name'
+for item in special_ych:
+    analitika_df = analitika_df_change
+    analitika_df[special_column_name] = analitika_df[2].str.findall(item)
+    analitika_df[special_column_name] = [','.join(map(str, l)) for l in analitika_df[special_column_name]]
+    analitika_df = pd.concat([analitika_df, analitika_df[special_column_name].str.split(',', expand=True)])
+    special_df = analitika_df[analitika_df[special_column_name] == item]
+    special_df = special_df.reset_index(drop=True)
+    with pd.ExcelWriter(filename, engine="openpyxl", mode='a', if_sheet_exists='new') as writer:
+        special_df.to_excel(writer, sheet_name=item)
+
+statistic_for_gtp()
+
+# # Изменение формата отображения чисел
+wb = openpyxl.load_workbook(filename=filename)
+for ws in wb.worksheets[:len(special_ych):-1]:
+    for row in ws.iter_rows():
+        for cell in row:
+            ws.column_dimensions['B'].width = 18
+            ws.column_dimensions['C'].width = 18
+            cell.number_format = openpyxl.styles.numbers.BUILTIN_FORMATS[4]
+
+wb.save(filename)
+
+
+finish_time = time.time() - start_time
+print(finish_time)
