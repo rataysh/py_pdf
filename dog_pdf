@@ -1,0 +1,70 @@
+import os, xlsxwriter, openpyxl, time, fitz, re
+from openpyxl import Workbook
+
+
+start_time = time.time()
+names_xls = []
+path_to_directory = r'C:\Users\'
+# # # Наименивание файла
+name_xlsx_file = 'pdf'
+now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+filename = f'{name_xlsx_file}{now}.xlsx'
+
+
+def search():
+    '''Функция для прохода по всем файлам в введенном пути'''
+    for adress, dirs, files in os.walk(path_to_directory):
+        for file in files:
+            if file[-4:] != '.pdf':  # Критери исключений из поиска
+                continue
+            else:
+                output = (f'{adress}\{file}').replace('\\', '/')
+                names_xls.append(output)
+            yield output
+
+
+"""Изменение переменной поиска"""
+def variable_processing(change_var):
+    if str(change_var) != '[]':
+        return change_var
+
+
+wb = Workbook()
+sheet = wb.active
+sheet.title = 'data'
+row = 1
+sheet['A' + str(row)] = 'name'
+sheet['B' + str(row)] = 'name'
+
+
+
+for i in search():
+    pdf_document = fitz.open(i)
+    row += 1
+    for current_page in range(len(pdf_document)):
+        page = pdf_document.loadPage(current_page).get_text()
+        # print(page)
+        replaced = re.sub('\s+', ' ', page)
+
+        '''Простой поиск по описания до искомого значения и после'''
+        code = re.findall(r'fist discripthion (.*?), second', replaced)
+        if variable_processing(code) != None:
+            code = variable_processing(code)
+            sheet['A' + str(row)] = code[0]  # name
+        
+        '''Поиск по описания до искомого значения и после + предыдущяя переменная'''
+        contract_help = ''
+        customer = re.findall(r'fist discripthion (.*?), second', replaced)
+        if variable_processing(customer) != None:
+            customer = variable_processing(customer)
+            ''' Для поиска преобразую переменную '''
+            customer_help = str(customer).replace(
+                "[", "").replace("]", "").replace("\'", "").replace("(", "\(").replace(")", "\)")
+            sheet['B' + str(row)] = customer_adhesion_contract_reg_date_str[0]  # name
+
+
+
+wb.save(filename)
+
+finish_time = time.time() - start_time
+print(finish_time)
